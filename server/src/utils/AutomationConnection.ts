@@ -92,7 +92,7 @@ export class AutomationConnection {
 
             logger
                 .data(message)
-                .debug(`RECIEVED AUTOMATION MESSAGE: ${message.address}`)
+                .debug(`RECEIVED AUTOMATION MESSAGE: ${message.address}`)
 
             // Set state of Sisyfos:
             if (check('CHANNEL_PGM_ON_OFF')) {
@@ -284,6 +284,8 @@ export class AutomationConnection {
                 })
                 mixerGenericConnection.updateOutLevels()
                 global.mainThreadHandler.updateFullClientStore()
+            } else if (check('LOAD_MIXER_PRESET')) {
+                global.mainThreadHandler.loadMixerPreset(message.args[0])
             } else if (check('STATE_FULL')) {
                 // Get state from Producers Audio Mixer:
                 this.sendOutMessage(

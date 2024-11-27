@@ -37,6 +37,7 @@ export interface AutomationProtocol {
         STATE_CHANNEL_MUTE: string
         STATE_FULL: string
         STATE_CHANNEL: string
+        LOAD_MIXER_PRESET: string
         PING: string
     }
     toAutomation: {
@@ -112,6 +113,7 @@ export const AutomationPresets: { [key: string]: AutomationProtocol } = {
             STATE_CHANNEL_MUTE: '/ch/{value1}/mute/state',
             STATE_FULL: '/state/full',
             STATE_CHANNEL: '/ch/{value1}/state',
+            LOAD_MIXER_PRESET: '/loadmixerpreset',
             PING: '/ping/{value1}',
         },
         toAutomation: {

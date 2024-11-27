@@ -713,7 +713,6 @@ export class VMixMixerConnection implements MixerConnection {
         )
         for (const inputsPreset of data) {
             for (const inputNumber of inputsPreset.inputNumbers) {
-                logger.info('lst' + this.lastState.length)
                 const channelIndex = this.lastState.findIndex(
                     (input) => input.number === inputNumber,
                 )
@@ -736,7 +735,6 @@ export class VMixMixerConnection implements MixerConnection {
                     })
                 }
                 if (inputsPreset.linkSeparateMono) {
-                    logger.info('channel' + channelIndex)
                     global.mainThreadHandler.setLink(assignedFaderIndex, true)
                 }
                 for (const command of inputsPreset.commands) {

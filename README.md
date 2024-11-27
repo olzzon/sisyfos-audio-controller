@@ -271,6 +271,10 @@ Pass a command directly from Automation to Audiomixer
 
 /ch/{value1}/visible - integer { 0 or 1 }
 
+#### Load mixer preset:
+
+/loadmixerpreset - string {name of the preset}
+
 ## Get state:
 
 #### Get full state of all channels:

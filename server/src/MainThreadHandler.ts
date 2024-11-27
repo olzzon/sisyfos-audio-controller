@@ -130,6 +130,13 @@ export class MainThreadHandlers {
         this.updateFullClientStore()
     }
 
+    loadMixerPreset(presetName: string) {
+        logger.info(`Load Mixer Preset: ${presetName}`)
+        mixerGenericConnection.loadMixerPreset(presetName)
+        this.reIndexAssignedChannelsRelation()
+        this.updateFullClientStore()
+    }
+
     socketServerHandlers(socket: any) {
         logger.info('Setting up socket IO main handlers.')
 
@@ -201,12 +208,7 @@ export class MainThreadHandlers {
                 this.reIndexAssignedChannelsRelation()
                 this.updateFullClientStore()
             })
-            .on(IO.SOCKET_LOAD_MIXER_PRESET, (payload: any) => {
-                logger.info(`Set Mixer Preset: ${payload}`)
-                mixerGenericConnection.loadMixerPreset(payload)
-                this.reIndexAssignedChannelsRelation()
-                this.updateFullClientStore()
-            })
+            .on(IO.SOCKET_LOAD_MIXER_PRESET, (payload: any) => this.loadMixerPreset(payload))
             .on(IO.SOCKET_GET_PAGES_LIST, () => {
                 logger.info('Get custom pages list')
                 let customPages: CustomPages[] = getCustomPages()
