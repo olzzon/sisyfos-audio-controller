@@ -8,6 +8,8 @@ on:
   push:
     branches:
       - "develop"
+      - 'EAV-*'
+      - 'LENA-*'
 
 jobs:
   cache-dependencies:
@@ -200,3 +202,70 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+  publish-ecr-docker-image:
+    if: needs.check-docker-credentials.outputs.defined == 'false'
+    runs-on: ubuntu-latest
+    needs:
+        - build
+    permissions:
+        contents: read
+        packages: write
+        id-token: write
+    steps:
+        - name: Access repository
+          uses: actions/checkout@v4
+
+        - uses: actions/download-artifact@v4
+          with:
+              name: ${{ github.event.repository.name }}-client-develop
+              path: client/dist
+
+        - uses: actions/download-artifact@v4
+          with:
+              name: ${{ github.event.repository.name }}-server-develop
+              path: server/dist
+
+        - name: Determine if images should be published to ecr
+          id: ecrrepo
+          run: |
+              # check if a release branch, or master, or a tag
+              if [[ "${{ github.ref }}" =~ ^refs/heads/release([0-9]+)$ || "${{ github.ref }}" == "refs/heads/master" || "${{ github.ref }}" == refs/tags/* || "${{ github.ref }}" == refs/heads/EAV-* || "${{ github.ref }}" == refs/heads/LENA-* || "${{ github.ref }}" == refs/heads/develop  ]]
+              then
+                ECRREPO_PUBLISH="1"
+              else
+                ECRREPO_PUBLISH="0"
+              fi
+              # debug output
+              echo "ecrrepo-publish $ECRREPO_PUBLISH"
+              echo "ecrrepo-publish=$ECRREPO_PUBLISH" >> $GITHUB_OUTPUT
+        - name: Configure AWS Credentials
+          if: steps.ecrrepo.outputs.ecrrepo-publish == '1'
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+              role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+              aws-region: ${{ secrets.AWS_REGION }}
+        - name: Login to Amazon ECR
+          id: login-ecr
+          if: steps.ecrrepo.outputs.ecrrepo-publish == '1'
+          uses: aws-actions/amazon-ecr-login@v2
+        - name: Get the Docker tag for ecr
+          id: ecr-tag
+          if: steps.ecrrepo.outputs.ecrrepo-publish == '1'
+          uses: docker/metadata-action@v5
+          with:
+              images: ${{ steps.login-ecr.outputs.registry }}/sisyfos-audio-controller
+              tags: |
+                  type=schedule
+                  type=ref,event=branch
+                  type=ref,event=tag
+                  type=raw,value=latest,enable={{is_default_branch}}
+
+        - name: Build and push docker image tags
+          if: steps.ecrrepo.outputs.ecrrepo-publish == '1' && steps.ecr-tag.outputs.tags != 0
+          id: docker_build
+          uses: docker/build-push-action@v6
+          with:
+              context: .
+              push: true
+              labels: ${{ steps.ecr-tag.outputs.labels }}
+              tags: '${{ steps.ecr-tag.outputs.tags }}'          

@@ -442,7 +442,49 @@ jobs:
         run: yarn publish --access=public --tag latest --new-version "${{ needs.bump-version.outputs.version }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
+  publish-ecr-package:
+    if: needs.check-npm-token.outputs.defined == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    needs:
+      - bump-version
+    steps:
+      - name: Access repository
+        uses: actions/checkout@v4
+      - name: Configure publisher
+        run: |
+          git config user.name "${{ github.event.pusher.name }}"
+          git config user.email "${{ github.event.pusher.email }}"
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}
+          path: dist
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+          registry-url: "https://registry.npmjs.org"
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Login to CodeArtifact
+        run: |
+          aws codeartifact login --tool npm --repository ${{ secrets.AWS_CODE_ARTIFACT_REPOSITORY }} --domain ${{ secrets.AWS_CODE_ARTIFACT_DOMAIN }} --domain-owner ${{ secrets.AWS_ACCOUNT_ID }} --region ${{ secrets.AWS_REGION }}
+      - name: Configure CodeArtifact Token
+        run: |
+          export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain ${{ secrets.AWS_CODE_ARTIFACT_DOMAIN }} --domain-owner ${{ secrets.AWS_ACCOUNT_ID }} --region ${{ secrets.AWS_REGION }} --query authorizationToken --output text`
+          yarn config set npmRegistryServer "https://${{ secrets.AWS_CODE_ARTIFACT_DOMAIN }}-${{ secrets.AWS_ACCOUNT_ID }}.d.codeartifact.${{ secrets.AWS_REGION }}.amazonaws.com/npm/${{ secrets.AWS_CODE_ARTIFACT_REPOSITORY }}/"
+          yarn config set 'npmRegistries["https://${{ secrets.AWS_CODE_ARTIFACT_DOMAIN }}-${{ secrets.AWS_ACCOUNT_ID }}.d.codeartifact.${{ secrets.AWS_REGION }}.amazonaws.com/npm/${{ secrets.AWS_CODE_ARTIFACT_REPOSITORY }}/"].npmAuthToken' "${CODEARTIFACT_AUTH_TOKEN}"
+          yarn config set 'npmRegistries["https://${{ secrets.AWS_CODE_ARTIFACT_DOMAIN }}-${{ secrets.AWS_ACCOUNT_ID }}.d.codeartifact.${{ secrets.AWS_REGION }}.amazonaws.com/npm/${{ secrets.AWS_CODE_ARTIFACT_REPOSITORY }}/"].npmAlwaysAuth' "true"
+      - name: Publish package
+        run: yarn publish --access=public --tag latest --new-version "${{ needs.bump-version.outputs.version }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.AWS_ROLE_ARN }}
   check-docker-credentials:
     runs-on: ubuntu-latest
     needs: build

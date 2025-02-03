@@ -33,7 +33,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Configure CodeArtifact Token
         run: |
-          echo CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain selma --domain-owner ${{ secrets.AWS_ACCOUNT_ID }} --query authorizationToken --output text --region ${{ secrets.AWS_REGION }}) >> $GITHUB_ENV
+          echo CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain ${{ secrets.AWS_DOMAIN_NAME }}  --domain-owner ${{ secrets.AWS_ACCOUNT_ID }} --query authorizationToken --output text --region ${{ secrets.AWS_REGION }}) >> $GITHUB_ENV
       - name: Check release is desired
         id: do-publish
         run: |
@@ -57,8 +57,8 @@ jobs:
       - name: Bump version
         if: ${{ steps.do-publish.outputs.publish }}
         run: |
-          git config --global user.email "chandrashekar.nallamilli@tv2.no"
-          git config --global user.name "chandrashekar-nallamilli"
+          git config --global user.name "${{ github.event.pusher.name }}"
+          git config --global user.email "${{ github.event.pusher.email }}"
 
           COMMIT_TIMESTAMP=$(git log -1 --pretty=format:%ct HEAD)
           COMMIT_DATE=$(date -d @$COMMIT_TIMESTAMP +%Y%m%d-%H%M%S)
@@ -71,7 +71,7 @@ jobs:
       - name: Publish to Code Artifatct
         if: ${{ steps.do-publish.outputs.publish }}
         run: |
-          aws codeartifact login --tool npm --repository selma-store --domain selma --domain-owner ${{ secrets.AWS_ACCOUNT_ID }} --region ${{ secrets.AWS_REGION }}
+          aws codeartifact login --tool npm --repository ${{ secrets.AWS_CODE_ARTIFACT_REPOSITORY }} --domain ${{ secrets.AWS_CODE_ARTIFACT_DOMAIN }} --domain-owner ${{ secrets.AWS_ACCOUNT_ID }} --region ${{ secrets.AWS_REGION }}
           NEW_VERSION=$(node -p "require('./component-lib/package.json').version")
 
           yarn config set version-git-tag false
