@@ -18,6 +18,7 @@ const AUTOMATION_OSC_PORT = 5255
 export class AutomationConnection {
     oscConnection: any
     automationProtocol: AutomationProtocol
+    susbcribed: Record<string, { address: string, port: number, lastSeen: number }> = {}
 
     constructor() {
         this.sendOutMessage = this.sendOutMessage.bind(this)
@@ -91,6 +92,17 @@ export class AutomationConnection {
             logger
                 .data(message)
                 .debug(`RECEIVED AUTOMATION MESSAGE: ${message.address}`)
+
+            // update connected clients
+            if (!this.susbcribed[info.address + ':' + info.port]) {
+                this.susbcribed[info.address + ':' + info.port] = {
+                    address: info.address,
+                    port: info.port,
+                    lastSeen: Date.now()
+                }
+            } else {
+                this.susbcribed[info.address + ':' + info.port].lastSeen = Date.now()
+            }
 
             // Set state of Sisyfos:
             if (check('CHANNEL_PGM_ON_OFF')) {
@@ -458,6 +470,77 @@ export class AutomationConnection {
         return regex.test(message)
     }
 
+    updateRemoteFullState() {
+        const payload = JSON.stringify({
+            channel: state.faders[0].fader.map(
+                (
+                    {
+                        faderLevel,
+                        pgmOn,
+                        voOn,
+                        pstOn,
+                        showChannel,
+                        muteOn,
+                        inputGain,
+                        inputSelector,                                    
+                    }: Fader,
+                    index,
+                ): AutomationChannelAPI => ({
+                    faderLevel,
+                    pgmOn,
+                    voOn,
+                    pstOn,
+                    showChannel,
+                    inputGain,
+                    inputSelector,
+                    label: getFaderLabel(index),
+                    muteOn,
+                }),
+            ),
+        })
+
+        for (const client of Object.values(this.susbcribed)) {
+            if (!this._isClientSubscribed(client)) continue
+
+            this.sendOutMessage(
+                this.automationProtocol.toAutomation.STATE_FULL,
+                0,
+                payload,
+                's',
+                { address: client.address, port: client.port }
+            )
+        }
+    }
+
+    updateRemoteFader(faderIndex: number, fader: Fader) {
+        const channelState: AutomationChannelAPI = {
+            faderLevel: fader.faderLevel,
+            pgmOn: fader.pgmOn,
+            voOn: fader.voOn,
+            pstOn: fader.pstOn,
+            showChannel: fader.showChannel,
+            label: getFaderLabel(faderIndex),
+            muteOn: fader.muteOn,
+            inputGain: fader.inputGain,
+            inputSelector: fader.inputSelector,
+        }
+        for (const client of Object.values(this.susbcribed)) {
+            if (!this._isClientSubscribed(client)) continue
+
+            logger.debug('update remote fader state ' + JSON.stringify(client))
+
+            this.sendOutMessage(
+                this.automationProtocol.toAutomation.STATE_CHANNEL,
+                faderIndex + 1,
+                JSON.stringify({
+                    channel: [channelState],
+                }),
+                's',
+                { address: client.address, port: client.port }
+            )
+        }
+    }
+
     sendOutMessage(
         oscMessage: string,
         channel: number,
@@ -484,5 +567,15 @@ export class AutomationConnection {
                 to.port
             )
         }
+    }
+
+    private _isClientSubscribed (client: { address: string, port: number, lastSeen: number }): boolean {
+        if (Date.now() - client.lastSeen > 30000) {
+            // no pings received for 30+ seconds => stop sending updates to this client
+            delete this.susbcribed[client.address + ':' + client.port]
+            return false
+        }
+
+        return true
     }
 }
