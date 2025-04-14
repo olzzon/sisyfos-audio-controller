@@ -4,6 +4,7 @@ import {
     mixerProtocolPresets,
     mixerGenericConnection,
     remoteConnections,
+    automationConnection
 } from './mainClasses'
 import { SnapshotHandler } from './utils/SnapshotHandler'
 import { socketServer } from './expressHandler'
@@ -54,6 +55,7 @@ export class MainThreadHandlers {
 
     updateFullClientStore() {
         socketServer.emit(IO.SOCKET_SET_FULL_STORE, state)
+        automationConnection.updateRemoteFullState()
     }
 
     updatePartialStore(faderIndex: number) {
@@ -73,6 +75,7 @@ export class MainThreadHandlers {
                 })
             }
         )
+        automationConnection.updateRemoteFader(faderIndex, state.faders[0].fader[faderIndex])
     }
 
     updateMixerOnline(mixerIndex: number, onLineState?: boolean) {
