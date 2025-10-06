@@ -207,11 +207,11 @@ To set the state send these OSC commands from you Automation to Sisyfos Port: 52
 
 (the integer defines: 0 - Off, 1 - Pgm On, 2 - Voice Over)
 (if second is missing it will take default fade value)
-/ch/1/mix/pgm - integer: { 0, 1 or 2 } - float { fadetime in ms }
+/ch/1/pgm - integer: { 0, 1 or 2 } - float { fadetime in ms }
 
 #### Set channel to PST:
 If showPFL in setting is enabled, this also sets the state of PFL
-/ch/1/mix/pst - integer: { 0, 1 or 2 } (the integer defines: 0 - Off, 1 - Pgm On, 2 - Voice Over)
+/ch/1/pst - integer: { 0, 1 or 2 } (the integer defines: 0 - Off, 1 - Pgm On, 2 - Voice Over)
 
 #### Mute channel:
 
@@ -221,7 +221,7 @@ If showPFL in setting is enabled, this also sets the state of PFL
 
 (the first defines the fader level)
 (if second is missing it will take default fade value)
-/ch/1/mix/faderlevel - float {between 0 and 1} - float { fadetime in ms }
+/ch/1/faderlevel - float {between 0 and 1} - float { fadetime in ms }
 
 #### Set channel label:
 
@@ -353,3 +353,4 @@ The Current CI in Sisyfos has a multiple purpose:
 -  Build a Windows self-contained executable
 -  Optional build to AWS
 We aim to have a buildplatform that can handle the needs for different broadcasters and different platforms.
+
