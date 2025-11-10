@@ -77,6 +77,11 @@ export interface MixerProtocol extends MixerProtocolGeneric {
     initializeCommands?: Array<MixerMessageProtocol>
 }
 
+export interface VMixMixerProtocol extends MixerProtocol {
+    channelMatrixPrefix?: string // Prefix used for channel identification (e.g., "EXT")
+    lrPreset: string // LR matrix preset name (hardcoded as "LR")
+}
+
 export interface ChannelTypes {
     channelTypeName: string
     channelTypeColor: string

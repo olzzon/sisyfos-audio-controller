@@ -10,6 +10,7 @@ import {
     CasparCGMixerGeometry,
     FxParam,
     MixerConnectionTypes,
+    VMixMixerProtocol,
 } from '../../../shared/src/constants/MixerProtocolInterface'
 import { OscMixerConnection } from './mixerConnections/OscMixerConnection'
 import { VMixMixerConnection } from './mixerConnections/VMixMixerConnection'
@@ -126,7 +127,7 @@ export class MixerGenericConnection {
                 }
                 case MixerConnectionTypes.vMix: {
                     this.mixerConnection[index] = new VMixMixerConnection(
-                        this.mixerProtocol[index] as MixerProtocol,
+                        this.mixerProtocol[index] as VMixMixerProtocol,
                         index
                     )
                     break

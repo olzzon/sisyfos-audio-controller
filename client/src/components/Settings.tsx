@@ -403,6 +403,27 @@ class Settings extends React.PureComponent<AppProps & Store, SettingsState> {
                                     />
                                 </label>
                                 <br />
+                                {window.mixerProtocolPresets[
+                                    mixer.mixerProtocol
+                                ].protocol === MixerConnectionTypes.vMix && (
+                                    <>
+                                        <label className="settings-input-field">
+                                            CHANNEL MATRIX PREFIX :
+                                            <input
+                                                name="channelMatrixPrefix"
+                                                type="text"
+                                                value={mixer.channelMatrixPrefix || ''}
+                                                onChange={(event) =>
+                                                    this.handleMixerChange(
+                                                        event,
+                                                        mixerIndex
+                                                    )
+                                                }
+                                            />
+                                        </label>
+                                        <br />
+                                    </>
+                                )}
                                 {window.mixerProtocol.protocol ===
                                 MixerConnectionTypes.GenericMidi
                                     ? this.renderMixerMidiSettings()

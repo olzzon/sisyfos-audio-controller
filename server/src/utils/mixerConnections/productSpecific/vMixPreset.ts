@@ -11,7 +11,7 @@ export interface InputsPreset {
     resetChannelMatrix?: boolean
     /** whether channel gain should be set to 0 */
     resetGain?: boolean
-    /** whether "SeparateMono" channels of an input should be linked in Sisyfos */
+    /** whether "LR" channels of an input should be linked in Sisyfos */
     linkSeparateMono?: boolean
 }
 export type Preset = InputsPreset[]

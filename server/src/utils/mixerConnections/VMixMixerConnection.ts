@@ -8,7 +8,7 @@ import path from 'path'
 //Utils:
 import {
     FxParam,
-    MixerProtocol,
+    VMixMixerProtocol,
 } from '../../../../shared/src/constants/MixerProtocolInterface'
 import {
     ChannelActions,
@@ -59,11 +59,14 @@ interface VMixInputLocation {
     channelType: number
 }
 
-const SEPARATE_MONO_MATRIX_PRESET_NAME = 'SeparateMono'
-type HackMatrixPreset = `${number}L` | typeof SEPARATE_MONO_MATRIX_PRESET_NAME
+type ChannelMatrixPreset =
+    | `${number}L` // Standard presets: 1L, 2L, 3L, etc.
+    | string // Custom preset names like "LR"
+    | `${string}${number}_${number}L` // Mix-minus presets: EXT1_1L, RTN2_3L, etc.
+    | `${string}${number}_${string}` // Mix-minus custom: EXT1_LR, RTN2_CustomPreset, etc.
 
 export class VMixMixerConnection implements MixerConnection {
-    mixerProtocol: MixerProtocol
+    mixerProtocol: VMixMixerProtocol
     mixerIndex: number
 
     vMixCommandConnection: ConnectionTCP
@@ -78,7 +81,7 @@ export class VMixMixerConnection implements MixerConnection {
 
     awaitingFirstXml = true
 
-    constructor(mixerProtocol: MixerProtocol, mixerIndex: number) {
+    constructor(mixerProtocol: VMixMixerProtocol, mixerIndex: number) {
         this.sendOutMessage = this.sendOutMessage.bind(this)
         this.xmlElementToInput = this.xmlElementToInput.bind(this)
         this.updateInputState = this.updateInputState.bind(this)
@@ -102,18 +105,18 @@ export class VMixMixerConnection implements MixerConnection {
             state.settings[0].mixers[this.mixerIndex].deviceIp,
             {
                 port: parseInt(
-                    state.settings[0].mixers[this.mixerIndex].devicePort + '',
+                    state.settings[0].mixers[this.mixerIndex].devicePort + ''
                 ),
                 debug: true,
-            },
+            }
         )
         this.vMixFeedbackConnection = new ConnectionTCP(
             state.settings[0].mixers[this.mixerIndex].deviceIp,
             {
                 port: parseInt(
-                    state.settings[0].mixers[this.mixerIndex].devicePort + '',
+                    state.settings[0].mixers[this.mixerIndex].devicePort + ''
                 ),
-            },
+            }
         )
         this.setupMixerConnection()
     }
@@ -135,7 +138,7 @@ export class VMixMixerConnection implements MixerConnection {
                     assigned.mixerIndex === this.mixerIndex &&
                     assigned.channelIndex === channelIndex
                 )
-            }),
+            })
         )
     }
 
@@ -164,7 +167,7 @@ export class VMixMixerConnection implements MixerConnection {
         logger.info(
             `OSC listening on port ${
                 state.settings[0].mixers[this.mixerIndex].localOscPort
-            }`,
+            }`
         )
 
         this.vMixFeedbackConnection.on('xml', (xml: string) => {
@@ -189,7 +192,7 @@ export class VMixMixerConnection implements MixerConnection {
         const inputs = XmlApi.Inputs.extractInputsFromXML(doc)
 
         const mappedInputs: Array<VMixInput> = inputs.flatMap(
-            this.xmlElementToInput,
+            this.xmlElementToInput
         )
 
         mappedInputs.forEach(this.updateInputState)
@@ -228,8 +231,15 @@ export class VMixMixerConnection implements MixerConnection {
             d.volumeF2 !== undefined
                 ? Math.pow(parseFloat(d.volumeF2 || '0'), 0.25)
                 : undefined
-        d.meterF1 = (9.555 * Math.log(d.meterF1 || 0)) / Math.log(3)
-        d.meterF2 = (9.555 * Math.log(d.meterF2 || 0)) / Math.log(3)
+        // Use -Infinity for silence to ensure VU meters completely drop to baseline when no audio present
+        d.meterF1 =
+            d.meterF1 > 0
+                ? (9.555 * Math.log(d.meterF1)) / Math.log(3)
+                : -Infinity
+        d.meterF2 =
+            d.meterF2 > 0
+                ? (9.555 * Math.log(d.meterF2)) / Math.log(3)
+                : -Infinity
         d.muted = d.muted ? d.muted === 'True' : true
         d.solo = d.solo === 'True'
         d.gainDb = parseFloat(d.gainDb || '0') / 24
@@ -294,7 +304,7 @@ export class VMixMixerConnection implements MixerConnection {
         let sendUpdate = false
 
         const dispatchAndSetUpdateState = (
-            update: FaderActions | ChannelActions | SettingsActions,
+            update: FaderActions | ChannelActions | SettingsActions
         ) => {
             store.dispatch(update)
             sendUpdate = true
@@ -386,10 +396,11 @@ export class VMixMixerConnection implements MixerConnection {
                 (input.linkable !== lastInputState?.linkable &&
                     privateData?.[PrivateDataTag.LINKABLE] !==
                         input.linkable) ||
-                !isLinked && (capabilities?.isLinkablePrimary !==
-                    (input.linkable === LinkableMode.PRIMARY) ||
-                capabilities?.isLinkableSecondary !==
-                    (input.linkable === LinkableMode.SECONDARY))
+                (!isLinked &&
+                    (capabilities?.isLinkablePrimary !==
+                        (input.linkable === LinkableMode.PRIMARY) ||
+                        capabilities?.isLinkableSecondary !==
+                            (input.linkable === LinkableMode.SECONDARY)))
             ) {
                 dispatchAndSetUpdateState({
                     type: FaderActionTypes.SET_CAPABILITY,
@@ -433,7 +444,7 @@ export class VMixMixerConnection implements MixerConnection {
     private sendVuLevels(
         assignedFaderIndex: number,
         channelIndex: number,
-        input: VMixInput,
+        input: VMixInput
     ) {
         if (state.faders[0].fader[assignedFaderIndex].isLinked) {
             let vuIndex: number = state.faders[0].fader[
@@ -449,21 +460,21 @@ export class VMixMixerConnection implements MixerConnection {
                 assignedFaderIndex,
                 VuType.Channel,
                 vuIndex,
-                dbToFloat(input.meterF1 + 12),
-            ) // add +15 to convert from dBFS
+                input.meterF1 === -Infinity ? 0 : dbToFloat(input.meterF1 + 12)
+            ) // send 0 directly for silence, otherwise convert
         } else {
             sendVuLevel(
                 assignedFaderIndex,
                 VuType.Channel,
                 0,
-                dbToFloat(input.meterF1 + 12),
-            ) // add +15 to convert from dBFS
+                dbToFloat(input.meterF1 + 12)
+            ) // add +12 to convert from dBFS
             if (!input.linkable) {
                 sendVuLevel(
                     assignedFaderIndex,
                     VuType.Channel,
                     1,
-                    dbToFloat(input.meterF2 + 12),
+                    dbToFloat(input.meterF2 + 12)
                 )
             }
         }
@@ -476,11 +487,11 @@ export class VMixMixerConnection implements MixerConnection {
     private sendOutMessage(
         vMixMessage: string,
         inputNumber: number,
-        value: string | number | undefined,
+        value: string | number | undefined
     ) {
         if (state.settings[0].mixers[this.mixerIndex].mixerOnline) {
             logger.trace(
-                `send ${vMixMessage} Input=${inputNumber}&Value=${value}`,
+                `send ${vMixMessage} Input=${inputNumber}&Value=${value}`
             )
             this.vMixCommandConnection.send({
                 Function: vMixMessage,
@@ -507,7 +518,7 @@ export class VMixMixerConnection implements MixerConnection {
                     .mixerMessage,
                 inputNumber,
                 this.mixerProtocol.channelTypes[channelType].toMixer.PFL_ON[0]
-                    .value,
+                    .value
             )
         } else {
             if (outputLevel === 0) {
@@ -519,7 +530,7 @@ export class VMixMixerConnection implements MixerConnection {
                     .mixerMessage,
                 inputNumber,
                 this.mixerProtocol.channelTypes[channelType].toMixer.PFL_OFF[0]
-                    .value,
+                    .value
             )
         }
     }
@@ -550,7 +561,7 @@ export class VMixMixerConnection implements MixerConnection {
         this.updateAuxLevel(
             channelIndex,
             state.settings[0].mixers[this.mixerIndex].nextSendAux - 1,
-            level,
+            level
         )
     }
 
@@ -568,10 +579,10 @@ export class VMixMixerConnection implements MixerConnection {
         this.sendOutMessage(
             this.appendSubchannelSuffix(
                 mixerMessage.mixerMessage,
-                subchannelNumber,
+                subchannelNumber
             ),
             inputNumber,
-            Math.round(level),
+            Math.round(level)
         )
     }
 
@@ -593,12 +604,20 @@ export class VMixMixerConnection implements MixerConnection {
      * where the number indicates which input channel is assigned to the L bus channels,
      * whereas every other channel is assigned to the R channel, e.g.:
      * 1L means channel 1 is assigned to L, and channels 2...8 are assigned to R.
-     * It also requires a "SeparateMono" preset, where each input channel is assigned to both L and R outs.
+     * It also requires a "LR" preset, where each input channel is assigned to both L and R outs.
+     *
+     * For mix-minus functionality, it also requires special presets for each EXT input:
+     * "EXT1_1L", "EXT1_2L", ..., "EXT1_8L" and "EXT1_LR" for EXT 1
+     * "EXT2_1L", "EXT2_2L", ..., "EXT2_8L" and "EXT2_LR" for EXT 2
+     * ...and so on for each EXT input.
+     * These presets work like the standard ones but exclude the specific EXT input
+     * from the matrix to prevent feedback loops.
+     *
      * Combined with SetVolumeChannelMixer[n] command, it allows for 64 channel combinations.
      */
     private hack_rearrangeAudioChannels(
         inputSelected: number,
-        inputNumber: number,
+        inputNumber: number
     ) {
         const leftInput = (inputSelected >> 8) & 0xff
         const rightInput = (inputSelected >> 16) & 0xff
@@ -608,27 +627,90 @@ export class VMixMixerConnection implements MixerConnection {
             }
         }
 
-        let preset: HackMatrixPreset =
-            rightInput === leftInput
-                ? SEPARATE_MONO_MATRIX_PRESET_NAME
-                : `${leftInput}L`
+        // Check if this input should use mix-minus presets
+        const returnFeedNumber = this.getReturnFeedNumber(inputNumber)
+        let preset: ChannelMatrixPreset
+
+        const prefix = state.settings[0].mixers[this.mixerIndex].channelMatrixPrefix ||
+                      this.mixerProtocol.channelMatrixPrefix
+        const lrPresetName = this.mixerProtocol.lrPreset
+
+        if (returnFeedNumber > 0 && prefix && lrPresetName) {
+            // Use mix-minus presets for return feeds to prevent feedback loops
+            // Only when both prefix and preset name are configured
+            preset =
+                rightInput === leftInput
+                    ? `${prefix}${returnFeedNumber}_${lrPresetName}`
+                    : `${prefix}${returnFeedNumber}_${leftInput}L`
+        } else {
+            // Use standard presets for regular inputs or when prefix detection is disabled
+            preset =
+                rightInput === leftInput && lrPresetName
+                    ? lrPresetName
+                    : `${leftInput}L`
+        }
+
         this.sendOutMessage(
             `AudioChannelMatrixApplyPreset`,
             inputNumber,
-            preset,
+            preset
         )
         this.sendOutMessage(
             `SetVolumeChannelMixer${leftInput}`,
             inputNumber,
-            100,
+            100
         )
         if (rightInput !== leftInput) {
             this.sendOutMessage(
                 `SetVolumeChannelMixer${rightInput}`,
                 inputNumber,
-                100,
+                100
             )
         }
+    }
+    /**
+     * Checks if the input should use mix-minus presets by looking for the configured prefix in fader labels.
+     * Returns the number after the prefix (e.g., "EXT 1" returns 1, "RTN 3" returns 3), or 0 if no match.
+     */
+    private getReturnFeedNumber(inputNumber: number): number {
+        const prefix = state.settings[0].mixers[this.mixerIndex].channelMatrixPrefix ||
+                      this.mixerProtocol.channelMatrixPrefix
+
+        // If no prefix configured, use standard presets
+        if (!prefix) return 0
+
+        // Find the fader for this input
+        const channelIndex = this.getChannelIndexForInput(inputNumber)
+        if (channelIndex === -1) return 0
+
+        const assignedFaderIndex = this.getAssignedFaderIndex(channelIndex)
+        if (assignedFaderIndex === -1) return 0
+
+        const fader = state.faders[0].fader[assignedFaderIndex]
+        const label = fader.userLabel || fader.label || ''
+
+        // Match prefix + number pattern (e.g., "EXT 1", "RTN 2")
+        const match = label.match(new RegExp(`${prefix}\\s+(\\d+)`, 'i'))
+        return match ? parseInt(match[1]) : 0
+    }
+
+    /**
+     * Finds the channel index that corresponds to a given VMix input number
+     */
+    private getChannelIndexForInput(inputNumber: number): number {
+        if (!this.lastState) return -1
+
+        for (
+            let channelIndex = 0;
+            channelIndex < this.lastState.length;
+            channelIndex++
+        ) {
+            const input = this.lastState[channelIndex]
+            if (input && input.number === inputNumber) {
+                return channelIndex
+            }
+        }
+        return -1
     }
 
     updateFx(channelIndex: number, fxParam: FxParam, level: number) {
@@ -652,7 +734,7 @@ export class VMixMixerConnection implements MixerConnection {
         this.sendOutMessage(
             this.appendSubchannelSuffix('SetVolume', subchannelNumber),
             inputNumber,
-            String(outputLevel),
+            String(outputLevel)
         )
         this.lastLevel[channelIndex] = outputLevel
 
@@ -678,7 +760,7 @@ export class VMixMixerConnection implements MixerConnection {
                 channelIndex
             ]
         const inputNumber = Number(
-            privateData?.[PrivateDataTag.INPUT_NUMBER] ?? '0',
+            privateData?.[PrivateDataTag.INPUT_NUMBER] ?? '0'
         )
         const result: VMixInputLocation = {
             inputNumber,
@@ -696,7 +778,7 @@ export class VMixMixerConnection implements MixerConnection {
 
     private appendSubchannelSuffix(
         command: string,
-        subchannelNumber: number | undefined,
+        subchannelNumber: number | undefined
     ): string {
         const suffix =
             subchannelNumber !== undefined ? `Channel${subchannelNumber}` : ''
@@ -709,7 +791,7 @@ export class VMixMixerConnection implements MixerConnection {
 
     loadMixerPreset(presetName: string) {
         let data: Preset = JSON.parse(
-            fs.readFileSync(path.resolve(STORAGE_FOLDER, presetName), 'utf8'),
+            fs.readFileSync(path.resolve(STORAGE_FOLDER, presetName), 'utf8')
         )
         for (const inputsPreset of data) {
             for (const inputNumber of inputsPreset.inputNumbers) {
@@ -719,7 +801,10 @@ export class VMixMixerConnection implements MixerConnection {
                         this.getAssignedFaderIndex(channelIndex)
                     if (inputsPreset.resetChannelMatrix) {
                         const inputSelected = (2 << 16) | (1 << 8)
-                        this.hack_rearrangeAudioChannels(inputSelected, inputNumber)
+                        this.hack_rearrangeAudioChannels(
+                            inputSelected,
+                            inputNumber
+                        )
                         store.dispatch({
                             type: FaderActionTypes.SET_INPUT_SELECTOR,
                             faderIndex: assignedFaderIndex,
@@ -734,13 +819,16 @@ export class VMixMixerConnection implements MixerConnection {
                         })
                     }
                     if (inputsPreset.linkSeparateMono) {
-                        global.mainThreadHandler.setLink(assignedFaderIndex, true)
+                        global.mainThreadHandler.setLink(
+                            assignedFaderIndex,
+                            true
+                        )
                     }
                     for (const command of inputsPreset.commands) {
                         this.sendOutMessage(
                             command.name,
                             inputNumber,
-                            command.value ?? '',
+                            command.value ?? ''
                         )
                     }
                 })
@@ -762,6 +850,6 @@ export class VMixMixerConnection implements MixerConnection {
     updateChannelSetting(
         channelIndex: number,
         setting: string,
-        value: string,
+        value: string
     ) {}
 }

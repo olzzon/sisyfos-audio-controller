@@ -119,6 +119,7 @@ export interface MixerSettings {
     mixerOnline: boolean
     localIp: string
     localOscPort: number
+    channelMatrixPrefix?: string // Channel prefix for VMix mixers (e.g., "EXT")
 }
 
 export const defaultSettingsReducerState: Array<Settings> = [

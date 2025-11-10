@@ -1,14 +1,17 @@
 import {
-    MixerProtocol,
+    VMixMixerProtocol,
     FxParam,
     MixerConnectionTypes,
     emptyMixerMessage,
 } from '../MixerProtocolInterface'
 
-export const VMix: MixerProtocol = {
+export const VMix: VMixMixerProtocol = {
     protocol: MixerConnectionTypes.vMix,
     fxList: FxParam,
     label: 'VMix Audio Control',
+
+    // Hardcoded LR preset name
+    lrPreset: 'LR',
 
     // we support custom presets defined in json, with a *.vmix.json extension, used
     // in order not to confuse them with *.vmix files, which are vMix presets that we definitely don't want to restore
